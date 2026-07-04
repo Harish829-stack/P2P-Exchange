@@ -16,6 +16,10 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+interface IMultisigArbitrator {
+    function isOwner(address account) external view returns (bool);
+}
+
 contract P2PEscrow is ReentrancyGuard {
 
     // ─────────────────────────────────────────────
@@ -30,6 +34,7 @@ contract P2PEscrow is ReentrancyGuard {
     error InvalidAmount();
     error CannotBuyOwnOffer();
     error TimeoutNotReached();
+    error ArbitratorCannotTrade();
 
     // ─────────────────────────────────────────────
     // Constants
@@ -148,6 +153,10 @@ contract P2PEscrow is ReentrancyGuard {
     {
         if (msg.value == 0) revert InvalidAmount();
         if (fiatPriceCents == 0) revert InvalidAmount();
+        
+        if (IMultisigArbitrator(arbitrator).isOwner(msg.sender)) {
+            revert ArbitratorCannotTrade();
+        }
 
         offerId = nextOfferId++;
 
@@ -180,6 +189,10 @@ contract P2PEscrow is ReentrancyGuard {
 
         if (msg.sender == offer.seller)
             revert CannotBuyOwnOffer();
+
+        if (IMultisigArbitrator(arbitrator).isOwner(msg.sender)) {
+            revert ArbitratorCannotTrade();
+        }
 
         offer.buyer = payable(msg.sender);
         offer.lockedAt = block.timestamp;

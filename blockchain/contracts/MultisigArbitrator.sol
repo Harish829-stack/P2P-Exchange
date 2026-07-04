@@ -26,6 +26,7 @@ contract MultisigArbitrator {
     error InvalidThreshold();
     error InvalidOwner();
     error ExecutionFailed();
+    error AlreadyRejected();
 
     // ─────────────────────────────────────────────
     // Events
@@ -46,6 +47,11 @@ contract MultisigArbitrator {
         uint256 indexed txId
     );
 
+    event RejectTx(
+        address indexed owner,
+        uint256 indexed txId
+    );
+
     event OwnerAdded(address owner);
     event OwnerRemoved(address owner);
 
@@ -59,6 +65,9 @@ contract MultisigArbitrator {
         bytes data;
         bool executed;
         uint256 approvals;
+        uint256 rejections;
+        uint256 referenceId;
+        bool failed;
     }
 
     address[] public owners;
@@ -75,6 +84,11 @@ contract MultisigArbitrator {
 
     mapping(uint256 => mapping(address => bool))
         public approved;
+
+    mapping(uint256 => mapping(address => bool))
+        public rejected;
+
+    mapping(uint256 => bool) public activeProposals;
 
     // ─────────────────────────────────────────────
     // Modifiers
@@ -144,29 +158,44 @@ contract MultisigArbitrator {
     function submitTx(
         address target,
         uint256 value,
-        bytes calldata data
+        bytes calldata data,
+        uint256 referenceId
     )
         external
         onlyOwner
         returns (uint256 txId)
     {
+        if (referenceId != type(uint256).max) {
+            require(!activeProposals[referenceId], "Proposal already active");
+            activeProposals[referenceId] = true;
+        }
 
         txId = nextTxId++;
 
         transactions[txId] = Transaction({
-
             target: target,
             value: value,
             data: data,
             executed: false,
-            approvals: 0
+            approvals: 1, // Auto approve for sender
+            rejections: 0,
+            referenceId: referenceId,
+            failed: false
         });
+        
+        approved[txId][msg.sender] = true;
 
         emit SubmitTx(
             txId,
             target,
             value
         );
+        
+        emit ApproveTx(msg.sender, txId);
+        
+        if (threshold == 1) {
+            _executeTx(txId);
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -182,6 +211,7 @@ contract MultisigArbitrator {
         notExecuted(txId)
         notApproved(txId)
     {
+        if (rejected[txId][msg.sender]) revert AlreadyRejected();
 
         approved[txId][msg.sender] = true;
 
@@ -191,6 +221,38 @@ contract MultisigArbitrator {
             msg.sender,
             txId
         );
+        
+        if (transactions[txId].approvals >= threshold) {
+            _executeTx(txId);
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // Reject transaction
+    // ─────────────────────────────────────────────
+
+    function rejectTx(uint256 txId)
+        external
+        onlyOwner
+        txExists(txId)
+        notExecuted(txId)
+        notApproved(txId)
+    {
+        if (rejected[txId][msg.sender]) revert AlreadyRejected();
+        
+        rejected[txId][msg.sender] = true;
+        Transaction storage txn = transactions[txId];
+        txn.rejections++;
+        
+        emit RejectTx(msg.sender, txId);
+        
+        if (txn.rejections > owners.length - threshold) {
+            txn.failed = true;
+            txn.executed = true; // Mark as executed so it fails permanently
+            if (txn.referenceId != type(uint256).max) {
+                activeProposals[txn.referenceId] = false;
+            }
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -204,13 +266,15 @@ contract MultisigArbitrator {
         txExists(txId)
         notExecuted(txId)
     {
-
-        Transaction storage txn =
-            transactions[txId];
-
-        if (txn.approvals < threshold)
+        if (transactions[txId].approvals < threshold)
             revert InvalidThreshold();
 
+        _executeTx(txId);
+    }
+
+    function _executeTx(uint256 txId) internal {
+        Transaction storage txn = transactions[txId];
+        
         txn.executed = true;
 
         (bool ok, ) =
@@ -220,6 +284,10 @@ contract MultisigArbitrator {
 
         if (!ok)
             revert ExecutionFailed();
+            
+        if (txn.referenceId != type(uint256).max) {
+            activeProposals[txn.referenceId] = false;
+        }
 
         emit ExecuteTx(txId);
     }
