@@ -27,8 +27,11 @@ export const OfferList = ({ provider, signer, address, refreshTrigger }) => {
 
       const allOffers = [];
       for (let i = 0; i < Number(totalOffers); i++) {
-        const offer = await escrow.getOffer(i);
         const statusName = await escrow.getStatus(i);
+        // Exclude Cancelled and Completed (which covers settled and resolved) offers
+        if (statusName === 'Cancelled' || statusName === 'Completed') continue;
+        
+        const offer = await escrow.getOffer(i);
         allOffers.push({
           id: i,
           seller: offer.seller,

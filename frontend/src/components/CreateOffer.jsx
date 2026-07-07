@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import { getP2PEscrowContract } from '../utils/contracts';
 import { useToast } from './Toast';
 import { PlusCircle, Info, TrendingUp, Lock } from 'lucide-react';
+import { parseError } from '../utils/errors';
 
 export const CreateOffer = ({ signer, onOfferCreated }) => {
   const [ethAmount, setEthAmount] = useState('');
@@ -43,7 +44,7 @@ export const CreateOffer = ({ signer, onOfferCreated }) => {
       if (onOfferCreated) onOfferCreated();
     } catch (err) {
       console.error(err);
-      const msg = err.reason || err.shortMessage || 'Failed to list offer. Check console.';
+      const msg = parseError(err);
       toast.error(msg);
     } finally {
       setLoading(false);

@@ -6,6 +6,7 @@ import {
   Check, AlertTriangle, ShieldAlert, Ban, Unlock,
   User, ExternalLink, Clock, TrendingUp, Copy, Wallet, RefreshCw
 } from 'lucide-react';
+import { parseError } from '../utils/errors';
 
 const STATUS_CONFIG = {
   Open: {
@@ -137,7 +138,7 @@ export const OfferCard = ({ offer, signer, provider, address, onUpdate }) => {
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error(err);
-      const msg = err.reason || err.shortMessage || 'Transaction failed. See console.';
+      const msg = parseError(err);
       toast.error(msg);
     } finally {
       setLoading(false);

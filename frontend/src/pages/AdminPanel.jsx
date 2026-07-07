@@ -3,6 +3,7 @@ import { getMultisigContract, getP2PEscrowContract, formatAddress, ESCROW_ADDRES
 import { useToast } from '../components/Toast';
 import { Shield, CheckCircle, AlertOctagon, RefreshCw, ExternalLink, Gavel, Users, Clock, Info, XCircle } from 'lucide-react';
 import { ethers } from 'ethers';
+import { parseError } from '../utils/errors';
 
 const TxCard = ({ tx, signer, address, threshold, onRefresh }) => {
   const [loading, setLoading] = useState(false);
@@ -19,7 +20,9 @@ const TxCard = ({ tx, signer, address, threshold, onRefresh }) => {
       toast.success(`Approved TX #${tx.id}`);
       onRefresh();
     } catch (err) {
-      toast.error(err.reason || `Approval failed: ${err.shortMessage || 'See console'}`);
+      console.error(err);
+      const msg = parseError(err);
+      toast.error(msg !== 'Transaction failed. Check console for details.' ? msg : `Approval failed: ${err.shortMessage || err.reason || 'See console'}`);
     } finally {
       setLoading(false);
     }
@@ -43,7 +46,8 @@ const TxCard = ({ tx, signer, address, threshold, onRefresh }) => {
       onRefresh();
     } catch (err) {
       console.error(err);
-      toast.error(err.reason || `Execution failed. Ensure ${threshold} approvals exist and it hasn't already run.`);
+      const msg = parseError(err);
+      toast.error(msg !== 'Transaction failed. Check console for details.' ? msg : `Execution failed. Ensure ${threshold} approvals exist and it hasn't already run.`);
     } finally {
       setLoading(false);
     }
@@ -244,7 +248,8 @@ export const AdminPanel = ({ provider, signer, address }) => {
       fetchData();
     } catch (err) {
       console.error(err);
-      toast.error(err.reason || 'Proposal failed. Are you an owner?');
+      const msg = parseError(err);
+      toast.error(msg !== 'Transaction failed. Check console for details.' ? msg : 'Proposal failed. Are you an owner?');
     } finally {
       setSubmitting(false);
     }
